@@ -2,7 +2,7 @@
 
 Ferramenta web de triagem que detecta **cloaking** em sites: quando a página se comporta diferente conforme o visitante. É o padrão clássico de malware de WordPress. O site redireciona só quem acessa pelo celular, injeta código só para desktop, ou finge estar limpo para o Googlebot.
 
-Você cola uma URL. O CloakSee busca essa URL com 9 perfis de User-Agent em paralelo, registra a cadeia de redirecionamentos de cada perfil, cruza as respostas entre si e aplica assinaturas de malware e ofuscação no HTML recebido. O resultado é um relatório com veredito, achados por severidade e evidência, com export em Markdown pronto para colar em chamado.
+Você cola uma URL. O CloakSee busca essa URL com 9 perfis de User-Agent em paralelo e repete o acesso simulando 8 origens de clique (Google, WhatsApp, Instagram e outras redes). Ele registra a cadeia de redirecionamentos de cada acesso, cruza as respostas entre si e aplica assinaturas de malware e ofuscação no HTML recebido. O resultado é um relatório com veredito, achados por severidade e evidência, com export em Markdown pronto para colar em chamado.
 
 Irmão do [LinkSee](https://github.com/junglivre/LinkSee): mesma arquitetura (`server.py` single-file, stdlib puro, zero dependências, sem build step).
 
@@ -67,6 +67,21 @@ Cada scan visita a mesma URL com 9 identidades diferentes. O malware que esconde
 
 **5. Neutralização anti-ruído.** WAFs bloqueiam bots e tools por padrão. Se Googlebot, Bingbot, curl ou PowerShell receberem 403/429/503 ou falharem, o scanner os marca como **neutros**: saem das comparações de divergência e aparecem esmaecidos no relatório. Bloquear bot é hardening normal, não cloaking. Divergência em perfil de navegador sempre conta.
 
+**6. Detecção por origem (Referer).** Malware também faz cloaking por origem: o site fica limpo para acesso direto e redireciona quem clicou num link do Google ou de rede social. Cada scan repete o acesso com 8 Referers diferentes usando Chrome desktop e Chrome Android, e compara com o mesmo perfil sem Referer:
+
+| Origem | Referer enviado |
+|---|---|
+| Google | `google.com/search` |
+| Bing | `bing.com/search` |
+| WhatsApp | `l.whatsapp.com` |
+| Instagram | `l.instagram.com` |
+| YouTube | `youtube.com` |
+| Facebook | `l.facebook.com` |
+| X/Twitter | `t.co` |
+| TikTok | `tiktok.com` |
+
+Divergência de URL final para outro domínio vira achado high; mudança de conteúdo, status ou scripts exclusivos por origem também viram achados. A lista fica editável em `REFERERS` no topo do `server.py`.
+
 ## Entendendo o relatório
 
 O veredito vem do achado mais severo:
@@ -110,7 +125,7 @@ No topo do `server.py`:
 ## Limitações
 
 - Não executa o JavaScript do alvo. Redirect ou injection que só ocorre via JS no cliente não aparece, mas as assinaturas estáticas pegam `location.href` explícito e ofuscação no código.
-- Cloaking por IP, geolocalização ou Referer não é coberto.
+- Cloaking por IP ou geolocalização não é coberto. Cloaking por Referer cobre as 8 origens da lista `REFERERS`.
 - Analisa só a URL informada, sem autenticação e sem varrer subpáginas.
 - Páginas muito pequenas com vários valores dinâmicos podem gerar `content-divergent` medium; a evidência mostra a similaridade para você julgar.
 

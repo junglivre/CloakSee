@@ -117,6 +117,20 @@ USER_AGENTS: list[dict[str, str]] = [
     },
 ]
 
+# Perfis usados na passada por origem (Referer)
+REFERER_UA_IDS = ("chrome-win", "chrome-android")
+
+# Origens testadas: malware costuma redirecionar só quem vem de busca/redes sociais
+REFERERS: list[dict[str, str]] = [
+    {"id": "google", "label": "Google", "referer": "https://www.google.com/search?q=teste"},
+    {"id": "bing", "label": "Bing", "referer": "https://www.bing.com/search?q=teste"},
+    {"id": "whatsapp", "label": "WhatsApp", "referer": "https://l.whatsapp.com/"},
+    {"id": "instagram", "label": "Instagram", "referer": "https://l.instagram.com/"},
+    {"id": "youtube", "label": "YouTube", "referer": "https://www.youtube.com/"},
+    {"id": "facebook", "label": "Facebook", "referer": "https://l.facebook.com/"},
+    {"id": "twitter", "label": "X/Twitter", "referer": "https://t.co/"},
+    {"id": "tiktok", "label": "TikTok", "referer": "https://www.tiktok.com/"},
+]
 RISK_TLDS = {
     "top", "xyz", "tk", "ml", "ga", "cf", "gq", "club", "online", "live",
     "rest", "surf", "cyou", "icu", "cam", "sbs", "monster", "buzz",
@@ -384,7 +398,7 @@ class RedirectTracer(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch_agent(profile: dict[str, str], url: str) -> tuple[dict[str, Any], str, PageParser | None]:
+def fetch_agent(profile: dict[str, str], url: str, referer: dict[str, str] | None = None) -> tuple[dict[str, Any], str, PageParser | None]:
     trace: list[dict[str, Any]] = []
     opener = build_opener(RedirectTracer(trace))
     headers = {
@@ -393,12 +407,16 @@ def fetch_agent(profile: dict[str, str], url: str) -> tuple[dict[str, Any], str,
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
         "Accept-Encoding": "identity",
     }
+    if referer:
+        headers["Referer"] = referer["referer"]
     request = Request(url, headers=headers, method="GET")
     started = time.perf_counter()
 
     agent: dict[str, Any] = {
-        "id": profile["id"],
-        "label": profile["label"],
+        "id": f"{profile['id']}@{referer['id']}" if referer else profile["id"],
+        "label": f"{profile['label']} ← {referer['label']}" if referer else profile["label"],
+        "via": referer["label"] if referer else "",
+        "baseId": profile["id"] if referer else "",
         "category": profile.get("category", "browser"),
         "ok": False,
         "error": "",
@@ -835,6 +853,111 @@ def compare_agents(
 
 
 # ---------------------------------------------------------------------------
+# Comparações por Referer (origem do clique)
+def compare_referers(
+    referer_raw: list[tuple[dict[str, Any], str, PageParser | None]],
+    matrix_raw: list[tuple[dict[str, Any], str, PageParser | None]],
+    input_host: str,
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    base_by_id = {r[0]["id"]: r for r in matrix_raw if r[0]["ok"]}
+    base_shingles: dict[str, set[int]] = {}
+
+    def add(key: str, severity: str, title: str, detail: str, evidence: str, agents: list[str]) -> None:
+        findings.append(
+            {
+                "key": key,
+                "severity": severity,
+                "title": title,
+                "detail": detail,
+                "evidence": clip(evidence),
+                "agents": agents,
+            }
+        )
+
+    for agent, body, _page in referer_raw:
+        if not agent["ok"]:
+            continue
+        base_entry = base_by_id.get(agent["baseId"])
+        if not base_entry:
+            continue
+        base = base_entry[0]
+        label = agent["label"]
+
+        if agent["finalUrl"] != base["finalUrl"]:
+            cross_domain = root_domain(host_of(agent["finalUrl"])) != root_domain(host_of(base["finalUrl"]))
+            add(
+                "referer-final-url",
+                "high" if cross_domain else "medium",
+                "URL final muda conforme a origem do clique (Referer)",
+                "o site redireciona diferente para quem vem dessa origem - cloaking por referer",
+                f"{label}: {agent['finalUrl']} (sem referer: {base['finalUrl']})",
+                [label],
+            )
+
+        if agent["status"] != base["status"]:
+            add(
+                "referer-status",
+                "medium",
+                "Status HTTP muda conforme a origem do clique (Referer)",
+                "mesmo user-agent recebe resposta diferente quando vem dessa origem",
+                f"{label}: HTTP {agent['status']} (sem referer: {base['status']})",
+                [label],
+            )
+
+        if base["id"] not in base_shingles:
+            base_shingles[base["id"]] = shingle_set(base_entry[1])
+        sim = jaccard(base_shingles[base["id"]], shingle_set(body))
+        if sim < SIMILARITY_SAME:
+            add(
+                "referer-content",
+                "high" if sim < SIMILARITY_LOW else "medium",
+                "Conteúdo divergente para quem vem dessa origem (Referer)",
+                "mesmo user-agent recebe conteúdo diferente com esse Referer",
+                f"{label}: similaridade {sim:.2f} vs sem referer",
+                [label],
+            )
+
+        base_srcs = {s["src"] for s in base["scripts"] if s["src"]}
+        only = sorted({s["src"] for s in agent["scripts"] if s["src"]} - base_srcs)
+        if only:
+            risky = any(script_is_risky(s, input_host) for s in only)
+            add(
+                "referer-scripts",
+                "high" if risky else "medium",
+                "Scripts carregados apenas para quem vem dessa origem (Referer)",
+                "código servido seletivamente por origem - cloaking/injeção direcionada"
+                + (" (script de risco)" if risky else ""),
+                f"{label}: {'; '.join(only[:4])}",
+                [label],
+            )
+
+        for hop in agent["redirects"]:
+            location = hop.get("location", "")
+            scheme = urlparse(location).scheme.lower()
+            if scheme and scheme not in {"http", "https"}:
+                add(
+                    "redirect-bad-scheme",
+                    "critical",
+                    "Redirect para scheme não-HTTP",
+                    "Location com scheme javascript:/data: - tentativa de evasão",
+                    location,
+                    [label],
+                )
+            elif is_external(location, input_host):
+                add(
+                    "redirect-external-domain",
+                    "high",
+                    "Redirecionamento para domínio externo",
+                    "a cadeia de redirect sai do domínio original",
+                    f"{hop['url']} -{hop['code']}-> {location}",
+                    [label],
+                )
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # Orquestração do scan (PLANO.md 7.10 / 7.11)
 def merge_findings(lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
@@ -869,25 +992,34 @@ def scan_url(raw_url: str) -> dict[str, Any]:
     started = time.perf_counter()
     input_host = host_of(url)
 
-    with ThreadPoolExecutor(max_workers=min(8, len(USER_AGENTS))) as pool:
-        futures = {p["id"]: pool.submit(fetch_agent, p, url) for p in USER_AGENTS}
-        raw_results = [futures[p["id"]].result() for p in USER_AGENTS]
+    matrix_profiles = list(USER_AGENTS)
+    referer_profiles = [p for p in USER_AGENTS if p["id"] in REFERER_UA_IDS]
+    jobs: list[tuple[dict[str, str], dict[str, str] | None]] = [(p, None) for p in matrix_profiles]
+    jobs += [(p, ref) for ref in REFERERS for p in referer_profiles]
 
-    agents = [r[0] for r in raw_results]
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = [pool.submit(fetch_agent, p, url, ref) for p, ref in jobs]
+        raw_all = [f.result() for f in futures]
+
+    matrix_raw = raw_all[: len(matrix_profiles)]
+    referer_raw = raw_all[len(matrix_profiles):]
+
+    agents = [r[0] for r in matrix_raw]
     ok_agents = [a for a in agents if a["ok"]]
     if not ok_agents:
         errors = "; ".join(f"{a['label']}: {a['error']}" for a in agents[:3])
         raise URLError(f"Nenhum perfil conseguiu buscar a URL ({errors})")
 
-    ok_raw = [r for r in raw_results if r[0]["ok"]]
+    ok_raw = [r for r in matrix_raw if r[0]["ok"]]
     comparison_findings, comparisons = compare_agents(ok_raw, input_host)
+    referer_findings = compare_referers(referer_raw, matrix_raw, input_host)
     signature_findings = [
         scan_signatures(agent, body, page)
-        for agent, body, page in raw_results
+        for agent, body, page in matrix_raw + referer_raw
         if agent["ok"]
     ]
 
-    findings = merge_findings([comparison_findings, *signature_findings])
+    findings = merge_findings([comparison_findings, referer_findings, *signature_findings])
     summary = Counter(f["severity"] for f in findings)
 
     return {
@@ -897,6 +1029,7 @@ def scan_url(raw_url: str) -> dict[str, Any]:
         "verdict": build_verdict(findings),
         "summary": {key: summary.get(key, 0) for key in SEVERITY_ORDER},
         "agents": agents,
+        "refererAgents": [r[0] for r in referer_raw],
         "comparisons": comparisons,
         "findings": findings,
     }

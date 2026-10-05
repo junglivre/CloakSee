@@ -475,6 +475,24 @@
         </section>
 
         <section class="panel section">
+          <h2>Teste por Referer (origem do clique)</h2>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Origem</th>
+                  <th>Perfil</th>
+                  <th>HTTP</th>
+                  <th>URL final</th>
+                  <th>Hops</th>
+                </tr>
+              </thead>
+              <tbody id="ref-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel section">
           <h2>Redirecionamentos</h2>
           <div id="redirects-box"></div>
         </section>
@@ -514,7 +532,7 @@
       const setBusy = (busy) => {
         submitButton.disabled = busy;
         if (busy) {
-          statusEl.textContent = "Analisando com 8 perfis de user-agent...";
+          statusEl.textContent = "Analisando com 9 perfis e 8 origens (Referer)...";
           statusEl.classList.remove("error");
         }
       };
@@ -607,6 +625,36 @@
           note.textContent = `Perfis neutros — bloqueio/falha esperada em bot/tool, fora das comparações: ${labels.join(", ")}.`;
         } else {
           note.hidden = true;
+        }
+      };
+
+      const renderReferers = (data) => {
+        const tbody = document.querySelector("#ref-table");
+        tbody.replaceChildren();
+        const baseById = new Map(data.agents.map((a) => [a.id, a]));
+
+        for (const agent of data.refererAgents || []) {
+          const row = el("tr");
+          if (!agent.ok) row.classList.add("row-error");
+          const base = baseById.get(agent.baseId);
+
+          row.append(el("td", "", agent.via));
+          row.append(el("td", "", base ? base.label : agent.baseId));
+
+          const statusCell = el("td", "", agent.ok ? `HTTP ${agent.status}` : "ERRO");
+          if (agent.ok && base && agent.status !== base.status) {
+            statusCell.classList.add("warn-cell");
+          }
+          row.append(statusCell);
+
+          const urlCell = el("td", "mono", agent.ok ? agent.finalUrl : agent.error || "-");
+          if (agent.ok && base && agent.finalUrl !== base.finalUrl) {
+            urlCell.classList.add("warn-cell");
+          }
+          row.append(urlCell);
+
+          row.append(el("td", "", agent.hops));
+          tbody.append(row);
         }
       };
 
@@ -714,6 +762,15 @@
         }
         lines.push("");
         lines.push("## Redirecionamentos");
+        lines.push("");
+        lines.push("## Teste por Referer (origem do clique)");
+        const refAgents = data.refererAgents || [];
+        if (!refAgents.length) {
+          lines.push("Nenhum teste de referer executado.");
+        }
+        for (const a of refAgents) {
+          lines.push(`- **${a.via}** (${a.baseId}): ${a.ok ? `HTTP ${a.status} → ${a.finalUrl}` : "ERRO"}`);
+        }
         const withHops = data.agents.filter((a) => a.hops > 0);
         if (!withHops.length) {
           lines.push("Nenhum redirecionamento.");
@@ -742,6 +799,7 @@
         results.hidden = false;
         renderVerdict(data);
         renderUaTable(data);
+        renderReferers(data);
         renderRedirects(data);
         renderFindings(data);
         renderDiffs(data);
