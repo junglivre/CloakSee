@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CloakSee</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --panel-2: #f0f3f8;
+        --text: #172033;
+        --muted: #667085;
+        --border: #d7dce5;
+        --primary: #0f766e;
+        --primary-dark: #115e59;
+        --danger: #b42318;
+        --warn: #b45309;
+        --info: #1d4ed8;
+        --ok: #067647;
+        --shadow: 0 18px 45px rgba(18, 31, 53, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--muted);
+        font-size: 14px;
+        white-space: nowrap;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .search {
+        padding: 18px;
+        margin-bottom: 18px;
+      }
+
+      .form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      .url-input {
+        min-width: 0;
+        height: 46px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 14px;
+        color: var(--text);
+        background: #fff;
+        outline: none;
+      }
+
+      .url-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+      }
+
+      .button {
+        height: 46px;
+        border: 0;
+        border-radius: 8px;
+        padding: 0 16px;
+        color: #fff;
+        background: var(--primary);
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .button:hover {
+        background: var(--primary-dark);
+      }
+
+      .button:disabled {
+        opacity: 0.58;
+        cursor: wait;
+      }
+
+      .button.small {
+        height: 34px;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .status {
+        min-height: 22px;
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .section {
+        padding: 18px;
+        margin-bottom: 18px;
+      }
+
+      .section h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .empty {
+        padding: 24px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      /* --- veredito / resumo --- */
+      .verdict {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        padding: 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-weight: 800;
+        font-size: 18px;
+      }
+
+      .verdict[data-verdict="ALERTA"] {
+        background: #fef3f2;
+        border-color: #fecdca;
+        color: var(--danger);
+      }
+
+      .verdict[data-verdict="SUSPEITO"] {
+        background: #fffaeb;
+        border-color: #fedf89;
+        color: var(--warn);
+      }
+
+      .verdict[data-verdict="ATENÇÃO"] {
+        background: #eff8ff;
+        border-color: #b2ddff;
+        color: var(--info);
+      }
+
+      .verdict[data-verdict="OK"] {
+        background: #ecfdf3;
+        border-color: #a6f4c5;
+        color: var(--ok);
+      }
+
+      .verdict .meta {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+        overflow-wrap: anywhere;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid transparent;
+      }
+
+      .chip.critical { background: #fef3f2; color: var(--danger); border-color: #fecdca; }
+      .chip.high { background: #fffaeb; color: var(--warn); border-color: #fedf89; }
+      .chip.medium { background: #eff8ff; color: var(--info); border-color: #b2ddff; }
+      .chip.low { background: var(--panel-2); color: var(--muted); border-color: var(--border); }
+      .chip.agent { background: var(--panel-2); color: var(--text); border-color: var(--border); font-weight: 650; }
+
+      /* --- tabela de UAs --- */
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      .table thead th {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        text-align: left;
+        padding: 8px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+
+      .table tbody td {
+        padding: 8px;
+        border-top: 1px solid var(--border);
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .warn-cell {
+        background: #fffaeb;
+      }
+
+      .row-error td {
+        background: #fef3f2;
+      }
+
+      .row-neutral td {
+        background: var(--panel-2);
+        color: var(--muted);
+      }
+
+      /* --- redirecionamentos --- */
+      .agent-chain {
+        margin-bottom: 14px;
+      }
+
+      .agent-chain h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .hop {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        padding: 4px 0;
+        overflow-wrap: anywhere;
+      }
+
+      .hop .code {
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .hop.external .dest {
+        color: var(--danger);
+        font-weight: 650;
+      }
+
+      /* --- achados --- */
+      .finding {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 12px;
+        background: #fbfcfe;
+      }
+
+      .finding-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .finding-head h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .finding .detail {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .finding .agents {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 12px 0 0;
+        padding: 14px;
+        border-radius: 8px;
+        background: #101828;
+        color: #e5e7eb;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      pre.ev {
+        max-height: 120px;
+        font-size: 12px;
+      }
+
+      details {
+        margin-bottom: 18px;
+      }
+
+      details.panel {
+        padding: 18px;
+      }
+
+      summary {
+        cursor: pointer;
+        color: var(--primary-dark);
+        font-weight: 700;
+      }
+
+      /* --- diffs --- */
+      .diff-entry {
+        margin-bottom: 14px;
+      }
+
+      .diff-entry h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .diff-entry ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .diff-entry li {
+        overflow-wrap: anywhere;
+        margin-bottom: 4px;
+      }
+
+      @media (max-width: 820px) {
+        .shell {
+          width: min(100% - 20px, 680px);
+          padding: 18px 0;
+        }
+
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .form {
+          grid-template-columns: 1fr;
+        }
+
+        .button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <h1>CloakSee</h1>
+        <span class="badge">Triagem de cloaking · matriz de User-Agents</span>
+      </header>
+
+      <section class="panel search">
+        <form class="form" id="scan-form">
+          <input
+            class="url-input"
+            id="url-input"
+            name="url"
+            inputmode="url"
+            autocomplete="url"
+            placeholder="https://site-suspeito.com.br/"
+            required
+          />
+          <button class="button" id="submit-button" type="submit">Analisar site</button>
+        </form>
+        <div class="status" id="status">Cole a URL do site suspeito para começar.</div>
+      </section>
+
+      <div id="results" hidden>
+        <section class="panel section">
+          <h2>Resumo</h2>
+          <div class="verdict" id="verdict" data-verdict="">
+            <span id="verdict-label"></span>
+            <span class="meta" id="verdict-meta"></span>
+          </div>
+          <div class="chips" id="summary-chips"></div>
+        </section>
+
+        <section class="panel section">
+          <h2>Comparação entre UAs</h2>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Perfil</th>
+                  <th>HTTP</th>
+                  <th>URL final</th>
+                  <th>Bytes</th>
+                  <th>Hops</th>
+                  <th>Título</th>
+                </tr>
+              </thead>
+              <tbody id="ua-table"></tbody>
+            </table>
+          </div>
+          <div class="status" id="neutral-note" hidden></div>
+        </section>
+
+        <section class="panel section">
+          <h2>Redirecionamentos</h2>
+          <div id="redirects-box"></div>
+        </section>
+
+        <section class="panel section">
+          <h2>Achados</h2>
+          <div id="findings-box"></div>
+        </section>
+
+        <section class="panel section">
+          <h2>Diferenças por UA</h2>
+          <div id="diff-box"></div>
+        </section>
+
+        <details class="panel">
+          <summary>Relatório (Markdown)</summary>
+          <p style="margin:12px 0 0">
+            <button class="button small" id="copy-md" type="button">Copiar relatório</button>
+          </p>
+          <pre id="md-out"></pre>
+        </details>
+
+        <details class="panel">
+          <summary>JSON bruto</summary>
+          <pre id="raw-json"></pre>
+        </details>
+      </div>
+    </main>
+
+    <script>
+      const form = document.querySelector("#scan-form");
+      const input = document.querySelector("#url-input");
+      const statusEl = document.querySelector("#status");
+      const submitButton = document.querySelector("#submit-button");
+      const results = document.querySelector("#results");
+
+      const setBusy = (busy) => {
+        submitButton.disabled = busy;
+        if (busy) {
+          statusEl.textContent = "Analisando com 8 perfis de user-agent...";
+          statusEl.classList.remove("error");
+        }
+      };
+
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = String(text);
+        return node;
+      };
+
+      const hostOf = (url) => {
+        try {
+          return new URL(url).hostname;
+        } catch {
+          return "";
+        }
+      };
+
+      const renderVerdict = (data) => {
+        const banner = document.querySelector("#verdict");
+        banner.dataset.verdict = data.verdict;
+        document.querySelector("#verdict-label").textContent = data.verdict;
+        document.querySelector("#verdict-meta").textContent =
+          `${data.inputUrl} · ${(data.elapsedMs / 1000).toFixed(1)}s · ${data.startedAt}`;
+
+        const chips = document.querySelector("#summary-chips");
+        chips.replaceChildren();
+        for (const sev of ["critical", "high", "medium", "low"]) {
+          const count = data.summary[sev] || 0;
+          if (!count) continue;
+          chips.append(el("span", `chip ${sev}`, `${count} ${sev}`));
+        }
+        if (!chips.children.length) {
+          chips.append(el("span", "chip low", "nenhum achado"));
+        }
+      };
+
+      const renderUaTable = (data) => {
+        const tbody = document.querySelector("#ua-table");
+        tbody.replaceChildren();
+        const neutral = new Map(
+          (data.comparisons.neutralAgents || []).map((n) => [n.id, n.reason])
+        );
+        const baseline =
+          data.agents.find((a) => a.id === "chrome-win" && a.ok && !neutral.has(a.id)) ||
+          data.agents.find((a) => a.ok && !neutral.has(a.id));
+
+        for (const agent of data.agents) {
+          const row = el("tr");
+          const isNeutral = neutral.has(agent.id);
+          if (isNeutral) {
+            row.classList.add("row-neutral");
+          } else if (!agent.ok) {
+            row.classList.add("row-error");
+          }
+
+          row.append(el("td", "", agent.label));
+
+          const statusText = agent.ok
+            ? `HTTP ${agent.status}${isNeutral ? " · neutro" : ""}`
+            : isNeutral
+              ? "neutro"
+              : "ERRO";
+          const statusCell = el("td", "", statusText);
+          if (!isNeutral && agent.ok && baseline && agent.id !== baseline.id && agent.status !== baseline.status) {
+            statusCell.classList.add("warn-cell");
+          }
+          row.append(statusCell);
+
+          const urlCell = el("td", "mono", agent.ok ? agent.finalUrl : agent.error || "-");
+          if (!isNeutral && agent.ok && baseline && agent.id !== baseline.id && agent.finalUrl !== baseline.finalUrl) {
+            urlCell.classList.add("warn-cell");
+          }
+          row.append(urlCell);
+
+          row.append(el("td", "", agent.ok ? agent.bodyBytes.toLocaleString("pt-BR") : "-"));
+          row.append(el("td", "", agent.hops));
+          row.append(el("td", "", agent.title || "-"));
+
+          tbody.append(row);
+        }
+
+        const note = document.querySelector("#neutral-note");
+        if (neutral.size) {
+          const labels = (data.comparisons.neutralAgents || []).map(
+            (n) => `${n.label} (${n.reason})`
+          );
+          note.hidden = false;
+          note.textContent = `Perfis neutros — bloqueio/falha esperada em bot/tool, fora das comparações: ${labels.join(", ")}.`;
+        } else {
+          note.hidden = true;
+        }
+      };
+
+      const renderRedirects = (data) => {
+        const box = document.querySelector("#redirects-box");
+        box.replaceChildren();
+        const withHops = data.agents.filter((a) => a.hops > 0);
+
+        if (!withHops.length) {
+          box.append(el("div", "empty", "Nenhum redirecionamento em nenhum perfil."));
+          return;
+        }
+
+        for (const agent of withHops) {
+          const wrap = el("div", "agent-chain");
+          wrap.append(el("h3", "", agent.label));
+          for (const hop of agent.redirects) {
+            const hopHost = hostOf(hop.location);
+            const fromHost = hostOf(hop.url);
+            const external = hopHost && fromHost && hopHost !== fromHost;
+            const hopEl = el("div", `hop${external ? " external" : ""}`);
+            hopEl.append(el("span", "code mono", `${hop.code} →`));
+            hopEl.append(el("span", "dest mono", hop.location));
+            wrap.append(hopEl);
+          }
+          box.append(wrap);
+        }
+
+        const without = data.agents.length - withHops.length;
+        if (without > 0) {
+          const note = el("div", "status", `Sem redirecionamento em ${without} perfil(is).`);
+          box.append(note);
+        }
+      };
+
+      const renderFindings = (data) => {
+        const box = document.querySelector("#findings-box");
+        box.replaceChildren();
+
+        if (!data.findings.length) {
+          box.append(el("div", "empty", "Nenhum achado nas verificações automáticas."));
+          return;
+        }
+
+        for (const finding of data.findings) {
+          const card = el("div", "finding");
+          const head = el("div", "finding-head");
+          head.append(el("span", `chip ${finding.severity}`, finding.severity.toUpperCase()));
+          head.append(el("h3", "", finding.title));
+          card.append(head);
+
+          if (finding.detail) card.append(el("p", "detail", finding.detail));
+          if (finding.evidence) {
+            const ev = el("pre", "ev", finding.evidence);
+            card.append(ev);
+          }
+
+          const agents = el("div", "agents");
+          for (const label of finding.agents) {
+            agents.append(el("span", "chip agent", label));
+          }
+          card.append(agents);
+          box.append(card);
+        }
+      };
+
+      const renderDiffs = (data) => {
+        const box = document.querySelector("#diff-box");
+        box.replaceChildren();
+        const diffs = data.comparisons.scriptDiff || [];
+
+        if (!diffs.length) {
+          box.append(el("div", "empty", "Nenhum script exclusivo por perfil (todos carregam o mesmo conjunto)."));
+          return;
+        }
+
+        for (const entry of diffs) {
+          const wrap = el("div", "diff-entry");
+          wrap.append(el("h3", "", `Só em ${entry.label}:`));
+          const list = el("ul", "mono");
+          for (const src of entry.onlyScripts) {
+            list.append(el("li", "", src));
+          }
+          wrap.append(list);
+          box.append(wrap);
+        }
+      };
+
+      const buildMarkdown = (data) => {
+        const s = data.summary;
+        const lines = [];
+        lines.push(`# CloakSee — ${data.inputUrl}`);
+        lines.push("");
+        lines.push(
+          `Veredito: **${data.verdict}** · critical ${s.critical} · high ${s.high} · medium ${s.medium} · low ${s.low} · ${(data.elapsedMs / 1000).toFixed(1)}s`
+        );
+        lines.push("");
+        lines.push("## Comparação de UAs");
+        lines.push("| Perfil | HTTP | URL final | Bytes | Hops |");
+        lines.push("|---|---|---|---|---|");
+        for (const a of data.agents) {
+          lines.push(
+            `| ${a.label} | ${a.ok ? a.status : "ERRO"} | ${a.ok ? a.finalUrl : a.error || "-"} | ${a.bodyBytes} | ${a.hops} |`
+          );
+        }
+        lines.push("");
+        lines.push("## Redirecionamentos");
+        const withHops = data.agents.filter((a) => a.hops > 0);
+        if (!withHops.length) {
+          lines.push("Nenhum redirecionamento.");
+        }
+        for (const a of withHops) {
+          lines.push(`- **${a.label}**: ${a.redirects.map((h) => `${h.code} → ${h.location}`).join(" → ")}`);
+        }
+        lines.push("");
+        lines.push("## Achados");
+        if (!data.findings.length) {
+          lines.push("Nenhum achado nas verificações automáticas.");
+        }
+        for (const f of data.findings) {
+          lines.push("");
+          lines.push(`### [${f.severity.toUpperCase()}] ${f.title}`);
+          lines.push(`- agentes: ${f.agents.join(", ") || "-"}`);
+          if (f.detail) lines.push(`- ${f.detail}`);
+          if (f.evidence) lines.push(`- evidência: \`${f.evidence}\``);
+        }
+        lines.push("");
+        lines.push(`_Gerado por CloakSee em ${data.startedAt}._`);
+        return lines.join("\n");
+      };
+
+      const render = (data) => {
+        results.hidden = false;
+        renderVerdict(data);
+        renderUaTable(data);
+        renderRedirects(data);
+        renderFindings(data);
+        renderDiffs(data);
+        document.querySelector("#md-out").textContent = buildMarkdown(data);
+        document.querySelector("#raw-json").textContent = JSON.stringify(data, null, 2);
+      };
+
+      const loadScan = async () => {
+        const url = input.value.trim();
+        if (!url) {
+          input.focus();
+          return;
+        }
+
+        setBusy(true);
+        try {
+          const params = new URLSearchParams({ url });
+          const response = await fetch(`/api/scan?${params.toString()}`, { cache: "no-store" });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail ? `${data.error} ${data.detail}` : data.error);
+          }
+          render(data);
+          statusEl.textContent = `Análise concluída em ${(data.elapsedMs / 1000).toFixed(1)}s — veredito: ${data.verdict}`;
+          statusEl.classList.remove("error");
+          results.scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch (error) {
+          statusEl.textContent = error.message || "Erro ao analisar a URL.";
+          statusEl.classList.add("error");
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      document.querySelector("#copy-md").addEventListener("click", async () => {
+        const text = document.querySelector("#md-out").textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          statusEl.textContent = "Relatório copiado para a área de transferência.";
+          statusEl.classList.remove("error");
+        } catch {
+          const pre = document.querySelector("#md-out");
+          const range = document.createRange();
+          range.selectNodeContents(pre);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          document.execCommand("copy");
+          selection.removeAllRanges();
+          statusEl.textContent = "Relatório selecionado/copiado.";
+          statusEl.classList.remove("error");
+        }
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadScan();
+      });
+    </script>
+  </body>
+</html>
