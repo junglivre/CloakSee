@@ -112,6 +112,17 @@ ALLOW_PRIVATE_HOSTS = 0
 
 `ALLOW_PRIVATE_HOSTS = 1` (ou env `CLOAKSEE_ALLOW_PRIVATE_HOSTS=1`) libera scan de staging interno e localhost. Por padrão IPs privados e hosts locais são bloqueados (guarda anti-SSRF, aplicada também a cada hop de redirecionamento).
 
+Também dá para configurar sem editar o código: crie um arquivo `.env` na pasta do projeto (está no `.gitignore`):
+
+```sh
+SERVER_PORT=8791
+PASSWORD_PROTECTED=1
+ACCESS_PASSWORD=senha
+CLOAKSEE_ALLOW_PRIVATE_HOSTS=0
+```
+
+Precedência: variável de ambiente > `.env` > default no `server.py`.
+
 ## Estender sem programar
 
 No topo do `server.py`:

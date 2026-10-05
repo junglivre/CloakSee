@@ -35,20 +35,43 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 # ---------------------------------------------------------------------------
-# Configuração (padrão LinkSee: ajuste aqui em cima)
-SERVER_PORT = 8791
-PASSWORD_PROTECTED = 0
-ACCESS_PASSWORD = ""
+# Configuração
+# Precedência: variável de ambiente > arquivo .env > default abaixo.
+ROOT = Path(__file__).resolve().parent
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    """Parser .env mínimo (stdlib): KEY=VALUE, ignora comentários e vazias."""
+    values: dict[str, str] = {}
+    if not path.is_file():
+        return values
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def env_config(file_values: dict[str, str], key: str, default: str) -> str:
+    return os.environ.get(key, file_values.get(key, default))
+
+
+_ENV = load_env_file(ROOT / ".env")
+
+SERVER_PORT = int(env_config(_ENV, "SERVER_PORT", "8791"))
+PASSWORD_PROTECTED = int(env_config(_ENV, "PASSWORD_PROTECTED", "0"))
+ACCESS_PASSWORD = env_config(_ENV, "ACCESS_PASSWORD", "")
 SESSION_COOKIE_NAME = "cloaksee_session"
 APP_NAME = "CloakSee"
 
-ROOT = Path(__file__).resolve().parent
 MAX_BYTES = 3_000_000
 TIMEOUT_SECONDS = 15
 MAX_REDIRECTS = 8
 # 1 = permite escanear hosts privados/localhost (staging interno e testes).
 # Deixe 0 se a ferramenta for exposta em rede não confiável.
-ALLOW_PRIVATE_HOSTS = int(os.environ.get("CLOAKSEE_ALLOW_PRIVATE_HOSTS", "0"))
+ALLOW_PRIVATE_HOSTS = int(env_config(_ENV, "CLOAKSEE_ALLOW_PRIVATE_HOSTS", "0"))
 
 SESSION_TOKEN = secrets.token_urlsafe(32)
 BASELINE_UA = "chrome-win"
